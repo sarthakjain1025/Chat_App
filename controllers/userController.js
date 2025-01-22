@@ -1,5 +1,6 @@
 const User= require('../models/userModel');
 const Chat= require('../models/chatModel');
+const Group= require('../models/groupModel');
 const bcrypt =require('bcrypt');
 
 const registerLoad = async (req, res) => {
@@ -155,7 +156,47 @@ const updateChat = async (req, res) => {
         res.status(500).send({ success: false, msg: error.message });
     }
 };
+const loadGroups = async (req, res) => {
+    try {
+        res.render('group');
+    } catch (error) {
+        console.log(error.message);
+    }
+};
+const createGroup = async (req, res) => {
+    try {
+      // Validate session
+      if (!req.session.user || !req.session.user._id) {
+        return res.status(401).send("Unauthorized: User not logged in.");
+      }
+  
+      // Validate request body
+      const { name, limit } = req.body;
+      if (!name || !limit || !req.file) {
+        return res.status(400).render("group", {
+          message: "All fields are required (name, limit, and image).",
+        });
+      }
+  
+      // Create group
+      const group = new Group({
+        creator_id: req.session.user._id,
+        name,
+        image: "images/" + req.file.filename,
+        limit,
+      });
+  
+      // Save to database
+      await group.save();
+  
+      // Respond to client
+      res.render("group", { message: `${name} Group Created!` });
+    } catch (error) {
+      console.error("Error creating group:", error.message);
+      res.status(500).render("group", { message: "Failed to create group." });
+    }
+  };
+  
 
 
-
-module.exports= {registerLoad, register, loadDashboard, login, logout,loadLogin,deleteChat, saveChat,updateChat}
+module.exports= {registerLoad, register, loadDashboard, login, logout,loadLogin,deleteChat, saveChat,updateChat, loadGroups,createGroup}
