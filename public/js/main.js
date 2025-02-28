@@ -1,5 +1,3 @@
-
-
 (function($) {
 
 	"use strict";
@@ -205,3 +203,75 @@ var sender_id = userData._id;
     $('#'+data.id).find('span').text(data.message);
 
 });
+
+
+// add member js
+
+$('.addMember').click(function () {
+    var id = $(this).attr('data-id');
+    var limit = $(this).attr('data-limit');
+
+    $('#group_id').val(id);
+    $('#limit').val(limit);
+
+    $.ajax({
+        url: '/get-members',
+        type: 'POST',
+        data: { group_id: id },
+        success: function (res) {
+            console.log(res); // Debugging output
+
+            if (res.success == true) {
+                let users = res.data;
+                let html = '';
+
+                for (let i = 0; i < users.length; i++) {
+                    let isMemberOfGroup = users[i]['member'] && users[i]['member'].length > 0;
+
+                    html += `
+                        <tr>
+                            <td>
+                                <input type="checkbox" ${isMemberOfGroup ? 'checked' : ''} 
+                                    name="members[]" value="${users[i]['_id']}"/>
+                            </td>
+                            <td>${users[i]['name']}</td>
+                        </tr>
+                    `;
+                }
+
+                $('.addMembersInTable').html(html);
+            } else {
+                alert(res.msg);
+            }
+        }
+    });
+});
+
+
+// add member from submit code
+
+$('#add-member-form').submit(function(event){
+    event.preventDefault();
+
+    var formData= $(this).serialize();
+    $.ajax({
+        url:"/add-members",
+        type:"POST",
+        data:formData,
+        success:function(res){
+
+            if(res.success){
+                $('#memberModal').modal('hide');
+                $('#add-member-form')[0].reset();
+                alert(res.msg);
+            }
+            else
+            {
+                $('#add-member-error').text(res.msg);
+                setTimeout(()=>{
+                    $('#add-member-error').text('');
+                },3000);
+            }
+        }
+    })
+})

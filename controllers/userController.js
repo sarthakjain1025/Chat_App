@@ -1,7 +1,9 @@
 const User= require('../models/userModel');
 const Chat= require('../models/chatModel');
 const Group= require('../models/groupModel');
+const Member= require('../models/memberModel');
 const bcrypt =require('bcrypt');
+const mongoose = require('mongoose');
 
 const registerLoad = async (req, res) => {
     try {
@@ -156,47 +158,129 @@ const updateChat = async (req, res) => {
         res.status(500).send({ success: false, msg: error.message });
     }
 };
+
+
 const loadGroups = async (req, res) => {
     try {
-        res.render('group');
+       const groups = await Group.find({creator_id: req.session.user._id});
+        res.render('group', {groups: groups});
     } catch (error) {
         console.log(error.message);
+        res.status(500).render('group', { message: 'Error loading groups' });
     }
 };
+
+
 const createGroup = async (req, res) => {
     try {
-      // Validate session
-      if (!req.session.user || !req.session.user._id) {
-        return res.status(401).send("Unauthorized: User not logged in.");
-      }
-  
-      // Validate request body
-      const { name, limit } = req.body;
-      if (!name || !limit || !req.file) {
-        return res.status(400).render("group", {
-          message: "All fields are required (name, limit, and image).",
+        // Validate session
+        if (!req.session.user || !req.session.user._id) {
+            return res.status(401).send("Unauthorized: User not logged in.");
+        }
+
+        // Validate request body
+        const { name, limit } = req.body;
+        if (!name || !limit || !req.file) {
+            return res.status(400).render("group", {
+                message: "All fields are required (name, limit, and image).",
+            });
+        }
+
+        // Create group
+        const group = new Group({
+            creator_id: req.session.user._id,
+            name: req.body.name,
+            image: "images/" + req.file.filename,
+            limit: req.body.limit,
         });
-      }
-  
-      // Create group
-      const group = new Group({
-        creator_id: req.session.user._id,
-        name,
-        image: "images/" + req.file.filename,
-        limit,
-      });
-  
-      // Save to database
-      await group.save();
-  
-      // Respond to client
-      res.render("group", { message: `${name} Group Created!` });
+
+        // Save to database
+        await group.save();
+
+        // Redirect to the groups page after successful creation
+        res.redirect('/groups');
     } catch (error) {
-      console.error("Error creating group:", error.message);
-      res.status(500).render("group", { message: "Failed to create group." });
+        console.error("Error creating group:", error.message);
+        res.status(500).render("group", { message: "Failed to create group." });
     }
-  };
-  
+};
 
+const getMembers = async (req, res) => {
+    try {
+        if (!req.body.group_id) {
+            return res.status(400).send({ success: false, msg: "Group ID is required" });
+        }
 
-module.exports= {registerLoad, register, loadDashboard, login, logout,loadLogin,deleteChat, saveChat,updateChat, loadGroups,createGroup}
+        const groupId = new mongoose.Types.ObjectId(req.body.group_id);
+        const userId = new mongoose.Types.ObjectId(req.session.user._id);
+
+        var users = await User.aggregate([
+            {
+                $lookup: {
+                    from: "members",
+                    localField: "_id",
+                    foreignField: "user_id",
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ["$group_id", groupId] }
+                            }
+                        }
+                    ],
+                    as: "member"
+                }
+            },
+            {
+                $match: {
+                    _id: { $nin: [userId] }
+                }
+            }
+        ]);
+
+        res.status(200).send({ success: true, data: users });
+    } 
+    catch (error) {
+        res.status(400).send({ success: false, msg: error.message });
+    }
+};
+
+const addMembers = async (req, res) => {
+    try {
+        if (!req.body.members) {
+            return res.status(200).send({ success: false, msg: 'Please select at least one member' });
+        }
+
+        if (req.body.members.length > parseInt(req.body.limit)) {
+            return res.status(200).send({ success: false, msg: 'You cannot select more than ' + req.body.limit + ' Members' });
+        }
+
+        await Member.deleteMany({ group_id: req.body.group_id });
+
+        const data = req.body.members.map(member => ({
+            group_id: req.body.group_id,
+            user_id: member
+        }));
+
+        await Member.insertMany(data);
+
+        res.status(200).send({ success: true, msg: 'Members added successfully' });
+    } catch (error) {
+        return res.status(400).send({ success: false, msg: error.message });
+    }
+};
+
+module.exports = {
+    registerLoad,
+    register,
+    loadDashboard,
+    login,
+    logout,
+    loadLogin,
+    deleteChat,
+    saveChat,
+    updateChat,
+    loadGroups,
+    createGroup,
+    getMembers,
+    addMembers
+};

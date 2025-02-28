@@ -8376,3 +8376,12 @@ a[data-toggle="collapse"] {
   .fa-edit{
     color:blue
   }
+  .addMemberTable{
+    overflow: scroll;
+    height: 100px;
+    width: 100%;
+
+  }
+  #add-member-error{
+    color: red;
+  }
