@@ -162,13 +162,21 @@ const updateChat = async (req, res) => {
 
 const loadGroups = async (req, res) => {
     try {
-       const groups = await Group.find({creator_id: req.session.user._id});
-        res.render('group', {groups: groups});
+        // Ensure user is logged in
+        if (!req.session.user || !req.session.user._id) {
+            return res.status(401).render('group', { message: 'Unauthorized access' });
+        }
+
+        const groups = await Group.find({ creator_id: req.session.user._id });
+
+        // Ensure groups is always passed
+        res.render('group', { groups: groups || [] });
     } catch (error) {
         console.log(error.message);
-        res.status(500).render('group', { message: 'Error loading groups' });
+        res.status(500).render('group', { message: 'Error loading groups', groups: [] });
     }
 };
+
 
 
 const createGroup = async (req, res) => {
@@ -268,6 +276,71 @@ const addMembers = async (req, res) => {
         return res.status(400).send({ success: false, msg: error.message });
     }
 };
+const updateChatGroup = async (req, res) => {
+    try{
+        if(parseInt(req.body.limit) < parseInt(req.body.last_limit)){
+            await Member.deleteMany({ group_id: req.body.id });
+        }
+        var updateObj;
+        if(req.file !=undefined){
+            updateObj = {
+                name: req.body.name,
+                image: 'images/' + req.file.filename,
+                limit: req.body.limit
+            };
+    }
+    else
+    {
+        updateObj = {
+            name: req.body.name,
+            limit: req.body.limit
+        };
+    }
+    await Group.findByIdAndUpdate({ _id: req.body.id},{
+        $set: updateObj
+    });
+    res.status(200).send({ success: true, msg: 'Chat group updated successfully' });
+    }
+    catch(error){
+        res.status(400).send({ success: false, msg:error.message});
+    }
+}
+
+const deleteChatGroup = async (req, res) => {
+    try {
+        await Group.deleteOne({ _id: req.body.id });
+        await Member.deleteMany({ group_id: req.body.id });
+        res.status(200).send({ success: true, msg: 'Group deleted successfully' });
+    }
+    catch (error) {
+        res.status(500).send({ success: false, msg: error.message });
+    }
+    
+}
+
+const shareGroup = async (req, res) => {
+    try {
+        var groupData = await Group.findOne({ _id: req.params.id });
+        if (!groupData) {
+            return res.render('error', { message: 'Group not found' });
+        }   
+        if (!req.session.user) {
+            return res.render('error', { message: 'Please login with Apni Gallan to continue!!' });
+        }
+
+        var totalMembers = await Member.countDocuments({ group_id: req.params.id });
+        var available = groupData.limit - totalMembers;
+        var isOwner = groupData.creator_id.toString() === req.session.user._id.toString();
+        var isJoined = await Member.countDocuments({ group_id: req.params.id, user_id: req.session.user._id }) > 0;
+
+        res.render('shareLink', { group: groupData, available,totalMembers, isOwner, isJoined });
+
+    } catch (error) {
+        console.error("Error sharing group:", error.message);
+        res.status(500).render("group", { message: "Failed to share group." });
+    }
+};
+
 
 module.exports = {
     registerLoad,
@@ -282,5 +355,8 @@ module.exports = {
     loadGroups,
     createGroup,
     getMembers,
-    addMembers
+    addMembers,
+    updateChatGroup,
+    deleteChatGroup,
+    shareGroup
 };
